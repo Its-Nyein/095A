@@ -1,12 +1,46 @@
+import { useAuth } from "@/lib/authContext";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
-import { Button, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput, useTheme } from "react-native-paper";
 
 export default function Auth() {
+  const { signUp, signIn } = useAuth();
+  const theme = useTheme();
+  const router = useRouter();
   const [isSignUp, setIsSignUp] = useState<boolean>(false);
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleSwitch = () => {
     setIsSignUp(prev => !prev);
+  };
+
+  const handleAuthSubmit = async () => {
+    try {
+      if (!email || !password) {
+        setError("Please fill in all fields");
+        return;
+      }
+
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters long");
+        return;
+      }
+
+      setError(null);
+
+      if (isSignUp) {
+        await signUp(email, password);
+        // setIsSignUp(false);
+      } else {
+        await signIn(email, password);
+        router.replace("/");
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "An error occurred");
+    }
   };
 
   return (
@@ -25,17 +59,20 @@ export default function Auth() {
           keyboardType="email-address"
           mode="outlined"
           style={styles.input}
+          onChangeText={setEmail}
         />
         <TextInput
           label="Password"
           placeholder="Password"
           autoCapitalize="none"
-          keyboardType="visible-password"
+          secureTextEntry={true}
           mode="outlined"
           style={styles.input}
+          onChangeText={setPassword}
         />
-        <Button mode="contained" style={styles.button}>
-          {isSignUp ? "Create account" : "Sign in"}
+        {error && <Text style={{ color: theme.colors.error }}>{error}</Text>}
+        <Button mode="contained" style={styles.button} onPress={handleAuthSubmit}>
+          {isSignUp ? "Sign up" : "Sign in"}
         </Button>
         <Button mode="text" onPress={handleSwitch} style={styles.switchButton}>
           {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Create one"}

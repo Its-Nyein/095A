@@ -1,35 +1,32 @@
+import { AuthProvider, useAuth } from "@/lib/authContext";
 import { Stack, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 
-export default function RootLayout() {
-  const [isNavigationReady, setIsNavigationReady] = useState(false);
+const RouteGuard = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoadingUser } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const isAuthenticated = false;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsNavigationReady(true);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!isNavigationReady) return;
-
-    const inAuthGroup = segments[0] === "auth";
-
-    if (!isAuthenticated && !inAuthGroup) {
+    const authGroup = segments[0] === "auth";
+    if (!user && !authGroup && !isLoadingUser) {
       router.replace("/auth");
-    } else if (isAuthenticated && inAuthGroup) {
-      router.replace("/(tabs)");
+    } else if (user && authGroup && !isLoadingUser) {
+      router.replace("/");
     }
-  }, [isAuthenticated, segments, isNavigationReady, router]);
+  }, [user, segments, router, isLoadingUser]);
 
+  return children;
+};
+
+export default function RootLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="auth" options={{ headerShown: false }} />
-    </Stack>
+    <AuthProvider>
+      <RouteGuard>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+      </RouteGuard>
+    </AuthProvider>
   );
 }
