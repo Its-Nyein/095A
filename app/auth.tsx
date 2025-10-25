@@ -31,12 +31,19 @@ export default function Auth() {
 
       setError(null);
 
+      let errorMessage: string | undefined;
       if (isSignUp) {
-        await signUp(email, password);
+        errorMessage = await signUp(email, password);
         // setIsSignUp(false);
       } else {
-        await signIn(email, password);
-        router.replace("/");
+        errorMessage = await signIn(email, password);
+        if (!errorMessage) {
+          router.replace("/");
+        }
+      }
+
+      if (errorMessage) {
+        setError(errorMessage);
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : "An error occurred");
