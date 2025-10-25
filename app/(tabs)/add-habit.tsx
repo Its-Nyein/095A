@@ -1,4 +1,4 @@
-import { COLLECTION_NAME, DATABASE_ID, databases } from "@/lib/appwrite";
+import { COLLECTION_ID, DATABASE_ID, databases } from "@/lib/appwrite";
 import { useAuth } from "@/lib/authContext";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -39,10 +39,14 @@ export default function AddHabbitScreen() {
         $updatedAt: new Date().toISOString(),
       };
 
-      await databases.createDocument(DATABASE_ID, COLLECTION_NAME, ID.unique(), {
+      await databases.createDocument(DATABASE_ID, COLLECTION_ID, ID.unique(), {
         ...habbit,
         user_id: user.$id,
       });
+      // clear the form
+      setTitle("");
+      setDescription("");
+      setFrequency("daily");
 
       router.back();
     } catch (error) {
@@ -57,10 +61,11 @@ export default function AddHabbitScreen() {
 
   return (
     <View style={styles.container}>
-      <TextInput label="Title" mode="outlined" onChangeText={setTitle} style={styles.input} />
+      <TextInput label="Title" mode="outlined" value={title} onChangeText={setTitle} style={styles.input} />
       <TextInput
         label="Description"
         mode="outlined"
+        value={description}
         onChangeText={setDescription}
         style={styles.input}
       />
