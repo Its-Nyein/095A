@@ -1,6 +1,6 @@
 import { Models } from "react-native-appwrite";
 
-export interface Habbit extends Models.Document {
+export interface Habit extends Models.Document {
   $id: string;
   $createdAt: string;
   $updatedAt: string;

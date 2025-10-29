@@ -1,49 +1,52 @@
 import { client, COLLECTION_ID, DATABASE_ID, databases, RealtimeResponse } from "@/lib/appwrite";
 import { useAuth } from "@/lib/authContext";
-import { Habbit } from "@/types/database.types";
+import { Habit } from "@/types/database.types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Query } from "react-native-appwrite";
+import { Swipeable } from "react-native-gesture-handler";
 import { Button, Surface, Text } from "react-native-paper";
 
 export default function HomeScreen() {
   const { signOut, user } = useAuth();
-  const [habbits, setHabbits] = useState<Habbit[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
   useEffect(() => {
     const channel = `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents`;
-    const habbitSubscription = client.subscribe(channel, (response: RealtimeResponse) => {
+    const habitSubscription = client.subscribe(channel, (response: RealtimeResponse) => {
       if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-        fetchHabbits();
+        fetchHabits();
       } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-        fetchHabbits();
+        fetchHabits();
       } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-        fetchHabbits();
+        fetchHabits();
       } else {
-        fetchHabbits();
+        fetchHabits();
       }
     });
 
-    fetchHabbits();
+    fetchHabits();
 
     return () => {
-      habbitSubscription();
+      habitSubscription();
     };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [user]);
 
-  const fetchHabbits = async () => {
+  const fetchHabits = async () => {
     if (!user) {
       return;
     }
 
     try {
-      const habbits = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+      const habits = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
         Query.equal("user_id", user.$id ?? ""),
       ]);
-      setHabbits(habbits.documents as unknown as Habbit[]);
+      setHabits(habits.documents as unknown as Habit[]);
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
@@ -65,7 +68,9 @@ export default function HomeScreen() {
   if (error) {
     return (
       <View className="flex-1 items-center justify-center">
-        <Text variant="headlineSmall" style={styles.errorText}>{error}</Text>
+        <Text variant="headlineSmall" style={styles.errorText}>
+          {error}
+        </Text>
         <Button mode="contained" onPress={() => setError(null)} icon="refresh" className="mt-4">
           Retry
         </Button>
@@ -73,11 +78,46 @@ export default function HomeScreen() {
     );
   }
 
+  const handleDeleteHabit = async (id: string) => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+        return;
+      }
+
+      setError("An unknown error occurred");
+    }
+  };
+
+  const renderLeftActions = () => (
+    <View style={styles.leftActions}>
+      <View style={styles.leftActionContent}>
+        <MaterialCommunityIcons name="trash-can" size={28} color="#ffffff" />
+        <Text style={styles.leftActionText}>DELETE</Text>
+      </View>
+    </View>
+  );
+
+  const renderRightActions = () => (
+    <View style={styles.rightActions}>
+      <View style={styles.rightActionContent}>
+        <MaterialCommunityIcons name="check-circle" size={28} color="#ffffff" />
+        <Text style={styles.rightActionText}>COMPLETE</Text>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text variant="titleLarge" style={styles.title}>
-          Today&apos;s Habbits
+          Today&apos;s Habits
         </Text>
         <Button mode="contained" onPress={() => signOut()} icon="logout">
           Sign Out
@@ -85,38 +125,48 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {habbits.length === 0 ? (
-          <View style={styles.noHabbits}>
-            <Text variant="headlineSmall" style={styles.noHabbitsText}>
-              No habbits found
+        {habits.length === 0 ? (
+          <View style={styles.noHabits}>
+            <Text variant="headlineSmall" style={styles.noHabitsText}>
+              No habits found
             </Text>
           </View>
         ) : (
-          habbits.map((habbit: Habbit, idx: number) => (
-            <Surface key={idx} style={styles.surface} elevation={0}>
-              <View key={idx} style={styles.habbitContainer}>
-                <Text style={styles.habbitTitle}>{habbit.title}</Text>
-                <Text style={styles.habbitDescription}>{habbit.description}</Text>
-                <View style={styles.habbitStreakAndFrequencyContainer}>
-                  <View style={styles.habbitStreakItem}>
-                    <MaterialCommunityIcons name="fire" size={24} color="#ff9800" />
-                    <Text style={styles.habbitStreakText}>{habbit.streak_count} days streak</Text>
-                  </View>
-                  <View style={styles.habbitFrequencyItem}>
-                    <Text style={styles.habbitFrequencyText}>
-                      {habbit.frequency.charAt(0).toUpperCase() + habbit.frequency.slice(1)}
-                    </Text>
+          habits.map((habit: Habit, idx: number) => (
+            <Swipeable
+              key={idx}
+              ref={ref => {
+                swipeableRefs.current[habit.$id] = ref;
+              }}
+              overshootLeft={false}
+              overshootRight={false}
+              renderLeftActions={renderLeftActions}
+              renderRightActions={renderRightActions}
+              containerStyle={styles.swipeableContainer}
+              onSwipeableOpen={direction => {
+                if (direction === "left") {
+                  handleDeleteHabit(habit.$id);
+                }
+
+                swipeableRefs.current[habit.$id]?.close();
+              }}
+            >
+              <Surface style={styles.surface} elevation={0}>
+                <View style={styles.habitContainer}>
+                  <Text style={styles.habitTitle}>{habit.title}</Text>
+                  <Text style={styles.habitDescription}>{habit.description}</Text>
+                  <View style={styles.habitLastCompletedContainer}>
+                    <View style={styles.habitLastCompletedItem}>
+                      <MaterialCommunityIcons name="check-circle" size={20} color="#4caf50" />
+                      <Text style={styles.habitLastCompletedLabel}>Last completed:</Text>
+                      <Text style={styles.habitLastCompletedText}>
+                        {formatDate(habit.last_completed)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-                <View style={styles.habbitLastCompletedContainer}>
-                  <View style={styles.habbitLastCompletedItem}>
-                    <MaterialCommunityIcons name="check-circle" size={20} color="#4caf50" />
-                    <Text style={styles.habbitLastCompletedLabel}>Last completed:</Text>
-                    <Text style={styles.habbitLastCompletedText}>{formatDate(habbit.last_completed)}</Text>
-                  </View>
-                </View>
-              </View>
-            </Surface>
+              </Surface>
+            </Swipeable>
           ))
         )}
       </ScrollView>
@@ -140,36 +190,34 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   surface: {
-    padding: 16,
+    backgroundColor: "#ffffff",
     borderRadius: 10,
-    marginBottom: 16,
-    backgroundColor: "#00000005",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  habbitContainer: {
+  habitContainer: {
     padding: 20,
   },
-  habbitTitle: {
+  habitTitle: {
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 8,
     color: "#22223b",
   },
-  habbitDescription: {
+  habitDescription: {
     fontSize: 14,
     color: "#6c757d",
     marginBottom: 16,
   },
-  habbitStreakAndFrequencyContainer: {
+  habitStreakAndFrequencyContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  habbitStreakItem: {
+  habitStreakItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#e0e0e0",
@@ -179,27 +227,27 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 5,
   },
-  habbitStreakText: {
+  habitStreakText: {
     fontSize: 14,
     color: "#666",
     fontWeight: "600",
   },
-  habbitFrequencyItem: {
+  habitFrequencyItem: {
     backgroundColor: "#e0e0e0",
     padding: 8,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  habbitFrequencyText: {
+  habitFrequencyText: {
     fontSize: 14,
     color: "#666",
     fontWeight: "600",
   },
-  habbitLastCompletedContainer: {
+  habitLastCompletedContainer: {
     marginTop: 12,
   },
-  habbitLastCompletedItem: {
+  habitLastCompletedItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#e8f5e8",
@@ -211,27 +259,71 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: "#4caf50",
   },
-  habbitLastCompletedLabel: {
+  habitLastCompletedLabel: {
     fontSize: 13,
     color: "#666",
     fontWeight: "500",
   },
-  habbitLastCompletedText: {
+  habitLastCompletedText: {
     fontSize: 13,
     color: "#2e7d32",
     fontWeight: "600",
   },
-  noHabbits: {
+  noHabits: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 24,
   },
-  noHabbitsText: {
+  noHabitsText: {
     color: "#6c757d",
   },
   errorText: {
     color: "#6c757d",
     marginBottom: 24,
+  },
+  swipeableContainer: {
+    backgroundColor: "#f5f5f5",
+    borderRadius: 10,
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  leftActions: {
+    justifyContent: "center",
+    alignItems: "flex-start",
+    flex: 1,
+    backgroundColor: "#ff5252",
+    paddingLeft: 24,
+  },
+  rightActions: {
+    justifyContent: "center",
+    alignItems: "flex-end",
+    flex: 1,
+    backgroundColor: "#4caf50",
+    paddingRight: 24,
+  },
+  leftActionContent: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  rightActionContent: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  leftActionText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  rightActionText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });
