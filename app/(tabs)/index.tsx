@@ -7,39 +7,50 @@ import {
   RealtimeResponse,
 } from "@/lib/appwrite";
 import { useAuth } from "@/lib/authContext";
-import { Habit } from "@/types/database.types";
+import { Habit, HabitCompletion } from "@/types/database.types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { ID, Query } from "react-native-appwrite";
 import { Swipeable } from "react-native-gesture-handler";
 import { Button, Surface, Text } from "react-native-paper";
+import Toast from "react-native-toast-message";
 
 export default function HomeScreen() {
   const { signOut, user } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [todayCompletionsHabits, setTodayCompletionsHabits] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const swipeableRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
   useEffect(() => {
-    const channel = `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents`;
-    const habitSubscription = client.subscribe(channel, (response: RealtimeResponse) => {
+    const habitsChannel = `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents`;
+    const habitSubscription = client.subscribe(habitsChannel, (response: RealtimeResponse) => {
       if (response.events.includes("databases.*.collections.*.documents.*.create")) {
         fetchHabits();
       } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
         fetchHabits();
       } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
         fetchHabits();
-      } else {
-        fetchHabits();
       }
     });
 
-    fetchHabits();
+    const completionsChannel = `databases.${DATABASE_ID}.collections.${COMPLETIONS_COLLECTION_ID}.documents`;
+    const completionsSubscription = client.subscribe(
+      completionsChannel,
+      (response: RealtimeResponse) => {
+        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+          fetchTodayCompletionsHabits();
+        }
+      }
+    );
 
+    fetchHabits();
+    fetchTodayCompletionsHabits();
     return () => {
       habitSubscription();
+      completionsSubscription();
     };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [user]);
@@ -54,6 +65,30 @@ export default function HomeScreen() {
         Query.equal("user_id", user.$id ?? ""),
       ]);
       setHabits(habits.documents as unknown as Habit[]);
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+        return;
+      }
+
+      setError("An unknown error occurred");
+    }
+  };
+
+  const fetchTodayCompletionsHabits = async () => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const completions = await databases.listDocuments(DATABASE_ID, COMPLETIONS_COLLECTION_ID, [
+        Query.equal("user_id", user.$id ?? ""),
+        Query.greaterThanEqual("completed_at", today.toISOString()),
+      ]);
+      const completionsHabits = completions.documents as unknown as HabitCompletion[];
+      setTodayCompletionsHabits(completionsHabits.map(completion => completion.habit_id));
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
@@ -103,7 +138,12 @@ export default function HomeScreen() {
   };
 
   const handleCompleteHabit = async (id: string) => {
-    if (!user) {
+    if (!user || todayCompletionsHabits.includes(id)) {
+      Toast.show({
+        type: "error",
+        text1: "Already completed",
+        text2: "You have already completed this habit today.",
+      });
       return;
     }
 
@@ -150,6 +190,10 @@ export default function HomeScreen() {
     </View>
   );
 
+  const isHabitCompleted = (habitId: string) => {
+    return todayCompletionsHabits.includes(habitId);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -190,7 +234,10 @@ export default function HomeScreen() {
                 swipeableRefs.current[habit.$id]?.close();
               }}
             >
-              <Surface style={styles.surface} elevation={0}>
+              <Surface
+                style={[styles.surface, isHabitCompleted(habit.$id) ? styles.completedSurface : {}]}
+                elevation={0}
+              >
                 <View style={styles.habitContainer}>
                   <Text style={styles.habitTitle}>{habit.title}</Text>
                   <Text style={styles.habitDescription}>{habit.description}</Text>
@@ -375,5 +422,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.5,
+  },
+  completedSurface: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#4caf50",
   },
 });

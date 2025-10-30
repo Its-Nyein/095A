@@ -11,3 +11,12 @@ export interface Habit extends Models.Document {
   streak_count: number;
   last_completed: string;
 }
+
+export interface HabitCompletion extends Models.Document {
+  $id: string;
+  $createdAt: string;
+  $updatedAt: string;
+  user_id: string;
+  habit_id: string;
+  completed_at: string;
+}

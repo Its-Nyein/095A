@@ -1,9 +1,11 @@
+import { toastConfig as toastConfigConfig } from "@/configs/toast-config";
 import { AuthProvider, useAuth } from "@/lib/authContext";
 import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { PaperProvider, useTheme } from "react-native-paper";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 const RouteGuard = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoadingUser } = useAuth();
@@ -24,6 +26,7 @@ const RouteGuard = ({ children }: { children: React.ReactNode }) => {
 
 export default function RootLayout() {
   const theme = useTheme();
+  const toastConfig = toastConfigConfig;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
@@ -36,6 +39,7 @@ export default function RootLayout() {
             </RouteGuard>
           </SafeAreaProvider>
         </PaperProvider>
+        <Toast config={toastConfig} position="bottom" bottomOffset={100} />
       </AuthProvider>
     </GestureHandlerRootView>
   );
