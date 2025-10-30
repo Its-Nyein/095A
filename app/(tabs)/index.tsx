@@ -1,10 +1,17 @@
-import { client, COLLECTION_ID, DATABASE_ID, databases, RealtimeResponse } from "@/lib/appwrite";
+import {
+  client,
+  COLLECTION_ID,
+  COMPLETIONS_COLLECTION_ID,
+  DATABASE_ID,
+  databases,
+  RealtimeResponse,
+} from "@/lib/appwrite";
 import { useAuth } from "@/lib/authContext";
 import { Habit } from "@/types/database.types";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Query } from "react-native-appwrite";
+import { ID, Query } from "react-native-appwrite";
 import { Swipeable } from "react-native-gesture-handler";
 import { Button, Surface, Text } from "react-native-paper";
 
@@ -95,6 +102,36 @@ export default function HomeScreen() {
     }
   };
 
+  const handleCompleteHabit = async (id: string) => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      const currentDate = new Date().toISOString();
+      await databases.createDocument(DATABASE_ID, COMPLETIONS_COLLECTION_ID, ID.unique(), {
+        habit_id: id,
+        user_id: user.$id,
+        completed_at: currentDate,
+      });
+
+      const habit = habits.find(habit => habit.$id === id);
+      if (!habit) return;
+
+      await databases.updateDocument(DATABASE_ID, COLLECTION_ID, id, {
+        streak_count: habit.streak_count + 1,
+        last_completed: currentDate,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+        return;
+      }
+
+      setError("An unknown error occurred");
+    }
+  };
+
   const renderLeftActions = () => (
     <View style={styles.leftActions}>
       <View style={styles.leftActionContent}>
@@ -146,6 +183,8 @@ export default function HomeScreen() {
               onSwipeableOpen={direction => {
                 if (direction === "left") {
                   handleDeleteHabit(habit.$id);
+                } else if (direction === "right") {
+                  handleCompleteHabit(habit.$id);
                 }
 
                 swipeableRefs.current[habit.$id]?.close();
@@ -155,6 +194,17 @@ export default function HomeScreen() {
                 <View style={styles.habitContainer}>
                   <Text style={styles.habitTitle}>{habit.title}</Text>
                   <Text style={styles.habitDescription}>{habit.description}</Text>
+                  <View style={styles.habitStreakAndFrequencyContainer}>
+                    <View style={styles.habitStreakItem}>
+                      <MaterialCommunityIcons name="fire" size={24} color="#ff9800" />
+                      <Text style={styles.habitStreakText}>{habit.streak_count} days streak</Text>
+                    </View>
+                    <View style={styles.habitFrequencyItem}>
+                      <Text style={styles.habitFrequencyText}>
+                        {habit.frequency.charAt(0).toUpperCase() + habit.frequency.slice(1)}
+                      </Text>
+                    </View>
+                  </View>
                   <View style={styles.habitLastCompletedContainer}>
                     <View style={styles.habitLastCompletedItem}>
                       <MaterialCommunityIcons name="check-circle" size={20} color="#4caf50" />
